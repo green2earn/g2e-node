@@ -1,5 +1,5 @@
 [package]
-name = "pallet-template"
+name = "pallet-green-shop"
 version = "4.0.0-dev"
 description = "FRAME pallet template for defining custom runtime logic."
 authors = ["DuongHB <duonghb53@gmail.com>"]
