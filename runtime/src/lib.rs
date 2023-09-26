@@ -6,7 +6,17 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
+use codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use pallet_grandpa::AuthorityId as GrandpaId;
+pub use primitives::*;
+use primitives::{
+	currency::CurrencyId,
+	nft::{Attributes, Properties},
+};
+use scale_info::TypeInfo;
+use serde::{Deserialize, Serialize};
+use sp_runtime::traits::BlockNumberProvider;
+
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
@@ -16,8 +26,13 @@ use sp_runtime::{
 		AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, One, Verify,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity},
-	ApplyExtrinsicResult, MultiSignature,
+	ApplyExtrinsicResult, MultiSignature, RuntimeDebug,
 };
+use frame_system::RawOrigin;
+use frame_support::pallet_prelude::EnsureOrigin;
+use frame_support::PalletId;
+use sp_runtime::traits::AccountIdConversion;
+
 use sp_std::prelude::*;
 #[cfg(feature = "std")]
 use sp_version::NativeVersion;
@@ -67,6 +82,25 @@ pub type Nonce = u32;
 
 /// A hash of some data used by the chain.
 pub type Hash = sp_core::H256;
+// pub type RelayChainBlockNumber: BlockNumberProvider<BlockNumber = BlockNumber>;
+
+#[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq, TypeInfo, Serialize, Deserialize)]
+pub struct ClassData<Balance> {
+	/// Deposit reserved to create token class
+	pub deposit: Balance,
+	/// Class properties
+	pub properties: Properties,
+	/// Class attributes
+	pub attributes: Attributes,
+}
+
+#[derive(Encode, Decode, Clone, RuntimeDebug, PartialEq, Eq, TypeInfo, Serialize, Deserialize)]
+pub struct TokenData<Balance> {
+	/// Deposit reserved to create token
+	pub deposit: Balance,
+	/// Token attributes
+	pub attributes: Attributes,
+}
 
 /// Opaque types. These are used by the CLI to instantiate machinery that don't need to know
 /// the specifics of the runtime. They can then be made to be agnostic over specific formats
@@ -96,8 +130,8 @@ pub mod opaque {
 // https://docs.substrate.io/main-docs/build/upgrade#runtime-versioning
 #[sp_version::runtime_version]
 pub const VERSION: RuntimeVersion = RuntimeVersion {
-	spec_name: create_runtime_str!("node-template"),
-	impl_name: create_runtime_str!("node-template"),
+	spec_name: create_runtime_str!("g2e-node"),
+	impl_name: create_runtime_str!("g2e-node"),
 	authoring_version: 1,
 	// The version of the runtime specification. A full node will not attempt to use its native
 	//   runtime in substitute for the on-chain Wasm runtime unless all of `spec_name`,
@@ -135,6 +169,30 @@ pub fn native_version() -> NativeVersion {
 }
 
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
+
+// Pallet accounts of runtime
+parameter_types! {
+	pub const TreasuryPalletId: PalletId = PalletId(*b"aca/trsy");
+	pub const LoansPalletId: PalletId = PalletId(*b"aca/loan");
+	pub const DEXPalletId: PalletId = PalletId(*b"aca/dexm");
+	pub const CDPTreasuryPalletId: PalletId = PalletId(*b"aca/cdpt");
+	pub const CDPEnginePalletId: PalletId = PalletId(*b"aca/cdpe");
+	pub const HomaPalletId: PalletId = PalletId(*b"aca/homa");
+	pub const HonzonTreasuryPalletId: PalletId = PalletId(*b"aca/hztr");
+	pub const HomaTreasuryPalletId: PalletId = PalletId(*b"aca/hmtr");
+	pub const IncentivesPalletId: PalletId = PalletId(*b"aca/inct");
+	pub const CollatorPotId: PalletId = PalletId(*b"aca/cpot");
+	// Treasury reserve
+	pub const TreasuryReservePalletId: PalletId = PalletId(*b"aca/reve");
+	pub const NftPalletId: PalletId = PalletId(*b"aca/aNFT");
+	// Vault all unrleased native token.
+	pub UnreleasedNativeVaultAccountId: AccountId = PalletId(*b"aca/urls").into_account_truncating();
+	// This Pallet is only used to payment fee pool, it's not added to whitelist by design.
+	// because transaction payment pallet will ensure the accounts always have enough ED.
+	pub const TransactionPaymentPalletId: PalletId = PalletId(*b"aca/fees");
+	pub const LiquidCrowdloanPalletId: PalletId = PalletId(*b"aca/lqcl");
+	pub const StableAssetPalletId: PalletId = PalletId(*b"nuts/sta");
+}
 
 parameter_types! {
 	pub const BlockHashCount: BlockNumber = 2400;
@@ -268,6 +326,86 @@ impl pallet_sudo::Config for Runtime {
 	type WeightInfo = pallet_sudo::weights::SubstrateWeight<Runtime>;
 }
 
+/*************************** Config ORML pallets  ************************* */
+parameter_types! {
+	pub const MaxLocks: u32 = 50;
+	pub const MaxReserves: u32 = 50;
+}
+orml_traits::parameter_type_with_key! {
+	pub ExistentialDeposits: |_currency_id: CurrencyId| -> Balance {
+		Default::default()
+	};
+}
+
+impl orml_tokens::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type Balance = Balance;
+	type Amount = Amount;
+	type CurrencyId = CurrencyId;
+	type WeightInfo = (); // Add WeightInfo then test benchmark
+	type ExistentialDeposits = ExistentialDeposits;
+	type CurrencyHooks = ();
+	type MaxLocks = MaxLocks;
+	type MaxReserves = MaxReserves;
+	type ReserveIdentifier = ();
+	type DustRemovalWhitelist = ();
+}
+
+impl orml_nft::Config for Runtime {
+	type ClassId = u32;
+	type TokenId = u64;
+	type ClassData = ClassData<Balance>;
+	type TokenData = TokenData<Balance>;
+	type MaxClassMetadata = ConstU32<1024>;
+	type MaxTokenMetadata = ConstU32<1024>;
+}
+
+parameter_types! {
+	pub G2EFoundationAccounts: Vec<AccountId> = vec![
+		hex_literal::hex!["5336f96b54fa1832d517549bbffdfba2cae8983b8dcf65caff82d616014f5951"].into(),	// 22khtd8Zu9CpCY7DR4EPmmX66Aqsc91ShRAhehSWKGL7XDpL
+		hex_literal::hex!["26adf1c3a5b73f8640404d59ccb81de3ede79965b140addc7d8c0ff8736b5c53"].into(),	// 21kK5T9tvL8nVdAAWizjtBgRbGcAs466iU6ZxeNWb7mFgg5i
+		hex_literal::hex!["7e32626ae20238b3f2c63299bdc1eb4729c7aadc995ce2abaa4e42130209f5d5"].into(),	// 23j4ay2zBSgaSs18xstipmHBNi39W2Su9n8G89kWrz8eCe8F
+		TreasuryPalletId::get().into_account_truncating(),
+		TreasuryReservePalletId::get().into_account_truncating(),
+	];
+}
+
+pub struct EnsureG2EFoundation;
+impl EnsureOrigin<RuntimeOrigin> for EnsureG2EFoundation {
+	type Success = AccountId;
+
+	fn try_origin(o: RuntimeOrigin) -> Result<Self::Success, RuntimeOrigin> {
+		Into::<Result<RawOrigin<AccountId>, RuntimeOrigin>>::into(o).and_then(|o| match o {
+			RawOrigin::Signed(caller) =>
+				if G2EFoundationAccounts::get().contains(&caller) {
+					Ok(caller)
+				} else {
+					Err(RuntimeOrigin::from(Some(caller)))
+				},
+			r => Err(RuntimeOrigin::from(r)),
+		})
+	}
+
+	#[cfg(feature = "runtime-benchmarks")]
+	fn try_successful_origin() -> Result<RuntimeOrigin, ()> {
+		let zero_account_id =
+			AccountId::decode(&mut sp_runtime::traits::TrailingZeroInput::zeroes())
+				.expect("infinite length input; no invalid inputs for type; qed");
+		Ok(RuntimeOrigin::from(RawOrigin::Signed(zero_account_id)))
+	}
+}
+
+// impl orml_vesting::Config for Runtime {
+// 	type RuntimeEvent = RuntimeEvent;
+// 	type Currency = pallet_balances::Pallet<Runtime>;
+// 	type MinVestedTransfer = ConstU128<0>;
+// 	type VestedTransferOrigin = EnsureG2EFoundation;
+// 	type WeightInfo = (); // Add WeightInfo then test benchmark
+// 	type MaxVestingSchedules = ConstU32<100>;
+// 	type BlockNumberProvider = RelayChainBlockNumber;
+// }
+/************************************************************************** */
+
 /// Configure the pallet-template in pallets/template.
 impl pallet_template::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
@@ -277,13 +415,19 @@ impl pallet_template::Config for Runtime {
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(
 	pub struct Runtime {
-		System: frame_system,
-		Timestamp: pallet_timestamp,
-		Aura: pallet_aura,
-		Grandpa: pallet_grandpa,
-		Balances: pallet_balances,
-		TransactionPayment: pallet_transaction_payment,
-		Sudo: pallet_sudo,
+		// Core & Consensus
+		System: frame_system = 0,
+		Timestamp: pallet_timestamp = 1,
+		Aura: pallet_aura = 2,
+		Grandpa: pallet_grandpa = 3,
+		Balances: pallet_balances = 4,
+		TransactionPayment: pallet_transaction_payment = 5,
+		Sudo: pallet_sudo = 6,
+
+		// Tokens & Nft
+		OrmlTokens: orml_tokens = 10,
+		OrmlNFT: orml_nft = 11,
+		// OrmlVesting: orml_vesting = 12,
 		// Include the custom logic from the pallet-template in the runtime.
 		TemplateModule: pallet_template,
 	}
