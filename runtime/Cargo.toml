@@ -55,11 +55,12 @@ frame-system-benchmarking = { version = "4.0.0-dev", default-features = false, g
 
 # Local Dependencies
 pallet-template = { version = "4.0.0-dev", default-features = false, path = "../pallets/template" }
-# pallet-launcher-factory = { version = "4.0.0-dev", default-features = false, path = "../pallets/launcher-factory" }
+pallet-launcher-factory = { version = "4.0.0-dev", default-features = false, path = "../pallets/launcher-factory" }
 # pallet-green-shop = { version = "4.0.0-dev", default-features = false, path = "../pallets/green-shop" }
 primitives = { version = "2.0.0", path = "../primitives", default-features = false }
 
 # ORML
+#orml-asset-registry = { version = "0.4.1-dev", default-features = false, git = "https://github.com/open-web3-stack/open-runtime-module-library.git", rev = "5680303" }
 orml-nft = { version = "0.4.1-dev", default-features = false, git = "https://github.com/open-web3-stack/open-runtime-module-library.git", rev = "5680303" }
 orml-utilities = { version = "0.4.1-dev", default-features = false, git = "https://github.com/open-web3-stack/open-runtime-module-library.git", rev = "5680303" }
 orml-traits = { version = "0.4.1-dev", default-features = false, git = "https://github.com/open-web3-stack/open-runtime-module-library.git", rev = "5680303" }
@@ -67,6 +68,12 @@ orml-tokens = { version = "0.4.1-dev", default-features = false, git = "https://
 #orml-xtokens = { version = "0.4.1-dev", default-features = false, git = "https://github.com/open-web3-stack/open-runtime-module-library.git", rev = "5680303" }
 #orml-xcm-support = { version = "0.4.1-dev", default-features = false, git = "https://github.com/open-web3-stack/open-runtime-module-library.git", rev = "5680303" }
 #orml-vesting = { version = "0.4.1-dev", default-features = false, git = "https://github.com/open-web3-stack/open-runtime-module-library.git", rev = "5680303" }
+
+# modules
+# module-asset-registry = { path = "../modules/asset-registry", default-features = false }
+#module-currencies = { path = "../modules/currencies", default-features = false }
+#module-nft = { path = "../modules/nft", default-features = false }
+#module-support = { path = "../modules/support", default-features = false }
 
 [build-dependencies]
 substrate-wasm-builder = { version = "5.0.0-dev", git = "https://github.com/paritytech/substrate.git", optional = true , branch = "polkadot-v1.0.0" }
@@ -89,7 +96,7 @@ std = [
 	"frame-try-runtime/std",
 	"pallet-aura/std",
 	"pallet-balances/std",
-	#"pallet-launcher-factory/std",
+	"pallet-launcher-factory/std",
 	"pallet-grandpa/std",
 	"pallet-sudo/std",
 	"pallet-session/std",
@@ -113,10 +120,16 @@ std = [
 
 	"primitives/std",
 
+	#"orml-asset-registry/std",
 	"orml-utilities/std",
 	"orml-traits/std",
 	"orml-nft/std",
 	"orml-tokens/std",
+
+	#"module-asset-registry/std",
+	#"module-currencies/std",
+	#"module-nft/std",
+	#"module-support/std",
 ]
 runtime-benchmarks = [
 	"frame-benchmarking/runtime-benchmarks",

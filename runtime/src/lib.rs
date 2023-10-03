@@ -17,21 +17,20 @@ use scale_info::TypeInfo;
 use serde::{Deserialize, Serialize};
 use sp_runtime::traits::BlockNumberProvider;
 
+use frame_support::{pallet_prelude::EnsureOrigin, PalletId};
+use frame_system::RawOrigin;
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_runtime::{
 	create_runtime_str, generic, impl_opaque_keys,
 	traits::{
-		AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount, NumberFor, One, Verify,
+		AccountIdConversion, AccountIdLookup, BlakeTwo256, Block as BlockT, IdentifyAccount,
+		NumberFor, One, Verify,
 	},
 	transaction_validity::{TransactionSource, TransactionValidity},
 	ApplyExtrinsicResult, MultiSignature, RuntimeDebug,
 };
-use frame_system::RawOrigin;
-use frame_support::pallet_prelude::EnsureOrigin;
-use frame_support::PalletId;
-use sp_runtime::traits::AccountIdConversion;
 
 use sp_std::prelude::*;
 #[cfg(feature = "std")]
@@ -360,6 +359,14 @@ impl orml_nft::Config for Runtime {
 	type MaxTokenMetadata = ConstU32<1024>;
 }
 
+impl pallet_launcher_factory::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type Currency = pallet_balances::Pallet<Runtime>;
+	type SpecMaxLength = ConstU32<10>;
+	type NameMaxLength = ConstU32<20>;
+	type SymbolMaxLength = ConstU32<10>;
+}
+
 parameter_types! {
 	pub G2EFoundationAccounts: Vec<AccountId> = vec![
 		hex_literal::hex!["5336f96b54fa1832d517549bbffdfba2cae8983b8dcf65caff82d616014f5951"].into(),	// 22khtd8Zu9CpCY7DR4EPmmX66Aqsc91ShRAhehSWKGL7XDpL
@@ -416,20 +423,23 @@ impl pallet_template::Config for Runtime {
 construct_runtime!(
 	pub struct Runtime {
 		// Core & Consensus
-		System: frame_system = 0,
-		Timestamp: pallet_timestamp = 1,
-		Aura: pallet_aura = 2,
-		Grandpa: pallet_grandpa = 3,
-		Balances: pallet_balances = 4,
-		TransactionPayment: pallet_transaction_payment = 5,
-		Sudo: pallet_sudo = 6,
+		System: frame_system,
+		Timestamp: pallet_timestamp,
+		Aura: pallet_aura,
+		Grandpa: pallet_grandpa,
+		Balances: pallet_balances,
+		TransactionPayment: pallet_transaction_payment,
+		Sudo: pallet_sudo,
 
 		// Tokens & Nft
-		OrmlTokens: orml_tokens = 10,
-		OrmlNFT: orml_nft = 11,
+		OrmlTokens: orml_tokens,
+		OrmlNFT: orml_nft exclude_parts { Call },
 		// OrmlVesting: orml_vesting = 12,
 		// Include the custom logic from the pallet-template in the runtime.
 		TemplateModule: pallet_template,
+
+		// Logic
+		GreenLauncher: pallet_launcher_factory,
 	}
 );
 

@@ -4,6 +4,7 @@ cargo-features = ["resolver"]
 members = [
     "node",
     "pallets/template",
+    "modules/*",
     "primitives",
     "runtime",
 ]

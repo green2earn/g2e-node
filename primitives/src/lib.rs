@@ -22,12 +22,20 @@
 
 pub mod currency;
 pub mod nft;
+pub mod task;
 
+use scale_info::TypeInfo;
+
+pub use currency::CurrencyId;
+
+use codec::{Decode, Encode, MaxEncodedLen};
 use sp_runtime::{
 	generic,
 	traits::{BlakeTwo256, IdentifyAccount, Verify},
-	MultiSignature, OpaqueExtrinsic,
+	FixedU128, MultiSignature, OpaqueExtrinsic, RuntimeDebug,
 };
+/// Index of a transaction in the chain. 32-bit should be plenty.
+pub type Nonce = u32;
 
 /// An index to a block.
 pub type BlockNumber = u32;
@@ -70,3 +78,32 @@ pub type Header = generic::Header<BlockNumber, BlakeTwo256>;
 pub type Block = generic::Block<Header, OpaqueExtrinsic>;
 /// Block ID.
 pub type BlockId = generic::BlockId<Block>;
+/// Fee multiplier.
+pub type Multiplier = FixedU128;
+
+#[derive(
+	Encode,
+	Decode,
+	Eq,
+	PartialEq,
+	Copy,
+	Clone,
+	RuntimeDebug,
+	PartialOrd,
+	Ord,
+	MaxEncodedLen,
+	TypeInfo,
+)]
+#[repr(u8)]
+pub enum ReserveIdentifier {
+	CollatorSelection,
+	EvmStorageDeposit,
+	EvmDeveloperDeposit,
+	Honzon,
+	Nft,
+	TransactionPayment,
+	TransactionPaymentDeposit,
+
+	// always the last, indicate number of variants
+	Count,
+}
