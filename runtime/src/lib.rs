@@ -7,7 +7,7 @@
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 use codec::{Decode, Encode};
-use frame_support::dispatch::DispatchClass;
+use frame_support::{dispatch::DispatchClass, traits::AsEnsureOriginWithArg};
 use frame_system::{
 	limits::{BlockLength, BlockWeights},
 	EnsureSigned,
@@ -64,9 +64,6 @@ use pallet_transaction_payment::{ConstFeeMultiplier, CurrencyAdapter, Multiplier
 pub use sp_runtime::BuildStorage;
 pub use sp_runtime::{Perbill, Permill};
 
-/// Import the template pallet.
-pub use pallet_template;
-
 /// An index to a block.
 pub type BlockNumber = u32;
 
@@ -79,6 +76,8 @@ pub type AccountId = <<Signature as Verify>::Signer as IdentifyAccount>::Account
 
 /// Balance of an account.
 pub type Balance = u128;
+
+pub type AssetId = u32;
 
 /// Index of a transaction in the chain.
 pub type Nonce = u32;
@@ -129,6 +128,32 @@ pub mod opaque {
 	}
 }
 
+/// The native token, uses 18 decimals of precision.
+pub mod currency {
+	use super::Balance;
+
+	pub const OCTS: Balance = 1_000_000_000_000_000_000;
+	pub const SUPPLY_FACTOR: Balance = 1;
+
+	pub const UNITS: Balance = 1_000_000_000_000_000_000;
+	pub const DOLLARS: Balance = UNITS;
+	pub const CENTS: Balance = DOLLARS / 100;
+	pub const MILLICENTS: Balance = CENTS / 1_000;
+	pub const PENNY: Balance = MILLICENTS / 1_000;
+	pub const GIGAWEI: Balance = PENNY / 1_000;
+	pub const MEGAWEI: Balance = GIGAWEI / 1_000;
+	pub const KILOWEI: Balance = MEGAWEI / 1_000;
+	pub const WEI: Balance = KILOWEI / 1_000;
+
+	pub const TRANSACTION_BYTE_FEE: Balance = 10 * MILLICENTS * SUPPLY_FACTOR;
+	pub const STORAGE_BYTE_FEE: Balance = 100 * MILLICENTS * SUPPLY_FACTOR;
+	pub const EXISTENSIAL_DEPOSIT: Balance = 0;
+
+	pub const fn deposit(items: u32, bytes: u32) -> Balance {
+		(items as Balance) * DOLLARS * SUPPLY_FACTOR + (bytes as Balance) * STORAGE_BYTE_FEE
+	}
+}
+
 // To learn more about runtime versioning, see:
 // https://docs.substrate.io/main-docs/build/upgrade#runtime-versioning
 #[sp_version::runtime_version]
@@ -141,7 +166,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	//   `spec_version`, and `authoring_version` are the same between Wasm and native.
 	// This value is set to 100 to notify Polkadot-JS App (https://polkadot.js.org/apps) to use
 	//   the compatible custom types.
-	spec_version: 100,
+	spec_version: 102,
 	impl_version: 1,
 	apis: RUNTIME_API_VERSIONS,
 	transaction_version: 1,
@@ -183,9 +208,9 @@ const MAXIMUM_BLOCK_WEIGHT: Weight =
 
 // Prints debug output of the `contracts` pallet to stdout if the node is
 // started with `-lruntime::contracts=debug`.
-const CONTRACTS_DEBUG_OUTPUT: pallet_contracts::DebugInfo =
+pub const CONTRACTS_DEBUG_OUTPUT: pallet_contracts::DebugInfo =
 	pallet_contracts::DebugInfo::UnsafeDebug;
-const CONTRACTS_EVENTS: pallet_contracts::CollectEvents =
+pub const CONTRACTS_EVENTS: pallet_contracts::CollectEvents =
 	pallet_contracts::CollectEvents::UnsafeCollect;
 
 // Unit = the base number of indivisible units for balances
@@ -416,10 +441,40 @@ impl orml_nft::Config for Runtime {
 
 impl pallet_launcher_factory::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
-	type Currency = pallet_balances::Pallet<Runtime>;
+	type Currency = Balances;
 	type SpecMaxLength = ConstU32<10>;
 	type NameMaxLength = ConstU32<20>;
 	type SymbolMaxLength = ConstU32<10>;
+}
+
+parameter_types! {
+	pub const ApprovalDeposit: Balance = currency::DOLLARS;
+	pub const AssetAccountDeposit: Balance = currency::DOLLARS;
+	pub const AssetDeposit: Balance = 100 * currency::DOLLARS;
+	pub const MetadataDepositBase: Balance = 10 * currency::DOLLARS;
+	pub const MetadataDepositPerByte: Balance = currency::DOLLARS;
+	pub const StringLimit: u32 = 2048;
+}
+
+impl pallet_assets::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type Balance = Balance;
+	type AssetId = AssetId;
+	type AssetIdParameter = AssetId;
+	type Currency = Balances;
+	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
+	type AssetDeposit = AssetDeposit;
+	type AssetAccountDeposit = AssetAccountDeposit;
+	type MetadataDepositBase = MetadataDepositBase;
+	type MetadataDepositPerByte = MetadataDepositPerByte;
+	type ApprovalDeposit = ApprovalDeposit;
+	type StringLimit = StringLimit;
+	type RemoveItemsLimit = ConstU32<10>;
+	type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
+	type CallbackHandle = ();
+	type Freezer = ();
+	type Extra = ();
+	type WeightInfo = ();
 }
 
 parameter_types! {
@@ -529,12 +584,6 @@ impl pallet_contracts::Config for Runtime {
 // }
 /************************************************************************** */
 
-/// Configure the pallet-template in pallets/template.
-impl pallet_template::Config for Runtime {
-	type RuntimeEvent = RuntimeEvent;
-	type WeightInfo = pallet_template::weights::SubstrateWeight<Runtime>;
-}
-
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(
 	pub struct Runtime {
@@ -543,6 +592,7 @@ construct_runtime!(
 		Timestamp: pallet_timestamp,
 		Aura: pallet_aura,
 		Grandpa: pallet_grandpa,
+		Assets: pallet_assets,
 		Balances: pallet_balances,
 		TransactionPayment: pallet_transaction_payment,
 		RandomnessCollectiveFlip: pallet_insecure_randomness_collective_flip,
@@ -552,9 +602,6 @@ construct_runtime!(
 		// Tokens & Nft
 		OrmlTokens: orml_tokens,
 		OrmlNFT: orml_nft,
-		// OrmlVesting: orml_vesting = 12,
-		// Include the custom logic from the pallet-template in the runtime.
-		TemplateModule: pallet_template,
 
 		// Logic
 		GreenLauncher: pallet_launcher_factory,

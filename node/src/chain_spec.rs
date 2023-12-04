@@ -1,4 +1,4 @@
-use g2e_node::{
+use g2e_node_runtime::{
 	AccountId, AuraConfig, BalancesConfig, GrandpaConfig, OrmlNFTConfig, OrmlTokensConfig,
 	RuntimeGenesisConfig, Signature, SudoConfig, SystemConfig, WASM_BINARY,
 };
@@ -145,6 +145,7 @@ fn testnet_genesis(
 		aura: AuraConfig {
 			authorities: initial_authorities.iter().map(|x| (x.0.clone())).collect(),
 		},
+		assets: Default::default(),
 		grandpa: GrandpaConfig {
 			authorities: initial_authorities.iter().map(|x| (x.1.clone(), 1)).collect(),
 			..Default::default()
