@@ -465,8 +465,8 @@ impl pallet_assets::Config for Runtime {
 	type ForceOrigin = frame_system::EnsureRoot<AccountId>;
 	type AssetDeposit = ();
 	type AssetAccountDeposit = ();
-	type MetadataDepositBase = MetadataDepositBase;
-	type MetadataDepositPerByte = MetadataDepositPerByte;
+	type MetadataDepositBase = ();
+	type MetadataDepositPerByte = ();
 	type ApprovalDeposit = ApprovalDeposit;
 	type StringLimit = StringLimit;
 	type RemoveItemsLimit = ConstU32<10>;
