@@ -5,12 +5,6 @@
 /// <https://docs.substrate.io/reference/frame-pallets/>
 pub use pallet::*;
 
-#[cfg(test)]
-mod mock;
-
-#[cfg(test)]
-mod tests;
-
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 pub mod weights;
@@ -22,31 +16,14 @@ pub mod pallet {
 	use frame_support::{pallet_prelude::*, traits::Currency};
 	use frame_system::pallet_prelude::*;
 	use scale_info::prelude::vec::Vec;
-	use sp_runtime::traits::{AtLeast32BitUnsigned, SaturatedConversion};
-
-	#[cfg(feature = "std")]
-	use frame_support::serde::{Deserialize, Serialize};
-
-	type AccountOf<T> = <T as frame_system::Config>::AccountId;
-	type BalanceOf<T> = <<T as Config>::Currency as Currency<AccountOf<T>>>::Balance;
-
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
-	pub trait Config: frame_system::Config {
+	pub trait Config: frame_system::Config + pallet_assets::Config {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
-
-		// /// The token ID type
-		// type TokenId: Parameter
-		// 	+ Member
-		// 	+ AtLeast32BitUnsigned
-		// 	+ Default
-		// 	+ Copy
-		// 	+ MaybeSerializeDeserialize
-		// 	+ codec::FullCodec;
 
 		/// The currency trait.
 		type Currency: Currency<Self::AccountId>;
@@ -64,26 +41,6 @@ pub mod pallet {
 		// Type representing the weight of this pallet
 		// type WeightInfo: WeightInfo;
 	}
-
-	// Token info
-	#[derive(Clone, Encode, Decode, PartialEq, RuntimeDebug, TypeInfo, MaxEncodedLen)]
-	#[scale_info(skip_type_params(T))]
-	pub struct TokenArgs<T: Config> {
-		pub owner: AccountOf<T>,
-		pub spec: BoundedVec<u8, T::SpecMaxLength>,
-		pub name: BoundedVec<u8, T::NameMaxLength>,
-		pub symbol: BoundedVec<u8, T::SymbolMaxLength>,
-		pub decimals: u8,
-		pub total_supply: BalanceOf<T>,
-	}
-
-	// The pallet's runtime storage items.
-	// https://docs.substrate.io/main-docs/build/runtime-storage/
-	#[pallet::storage]
-	#[pallet::getter(fn tokens)]
-	// Learn more about declaring storage items:
-	// https://docs.substrate.io/main-docs/build/runtime-storage/#declaring-storage-items
-	pub type Tokens<T: Config> = StorageMap<_, Blake2_128, T::AccountId, TokenArgs<T>>;
 
 	// Pallets use events to inform users when important changes are made.
 	// https://docs.substrate.io/main-docs/build/events-errors/
@@ -116,56 +73,42 @@ pub mod pallet {
 		#[pallet::weight(100_000)]
 		pub fn create_token(
 			origin: OriginFor<T>,
-			spec: Vec<u8>,
+			asset_id: <T as pallet_assets::Config>::AssetIdParameter,
 			token_name: Vec<u8>,
 			token_symbol: Vec<u8>,
 			decimals: u8,
-			total_supply: u128,
+			total_supply: <T as pallet_assets::Config>::Balance,
 		) -> DispatchResult {
 			// Check that the extrinsic was signed and get the signer.
 			// This function will return an error if the extrinsic is not signed.
 			// https://docs.substrate.io/main-docs/build/origins/
-			let who = ensure_signed(origin)?;
+			let who = ensure_signed(origin.clone())?;
+			let admin = <T::Lookup as sp_runtime::traits::StaticLookup>::unlookup(who.clone());
 
-			let spec: BoundedVec<_, _> =
-				spec.clone().try_into().map_err(|_| Error::<T>::TooLong)?;
-			let name: BoundedVec<_, _> =
-				token_name.clone().try_into().map_err(|_| Error::<T>::TooLong)?;
-			let symbol: BoundedVec<_, _> =
-				token_symbol.clone().try_into().map_err(|_| Error::<T>::TooLong)?;
+			// Create Asset
+			pallet_assets::Pallet::<T>::create(
+				origin.clone(),
+				asset_id,
+				admin.clone(),
+				total_supply,
+			)?;
 
-			let total_supply: BalanceOf<T> = total_supply.saturated_into::<BalanceOf<T>>();
+			// Set metadata
 
-			// Update storage.
-			Tokens::<T>::insert(
-				&who,
-				TokenArgs { owner: who.clone(), spec, name, symbol, decimals, total_supply },
-			);
+			pallet_assets::Pallet::<T>::set_metadata(
+				origin.clone(),
+				asset_id,
+				token_name.clone(),
+				token_symbol,
+				decimals,
+			)?;
+
+			// Mint Token
+			pallet_assets::Pallet::<T>::mint(origin, asset_id, admin.clone(), total_supply)?;
 
 			// Emit an event.
 			Self::deposit_event(Event::CreateToken { who, token_name });
 			// Return a successful DispatchResultWithPostInfo
-			Ok(())
-		}
-
-		/// An example dispatchable that may throw a custom error.
-		#[pallet::call_index(1)]
-		#[pallet::weight(100_000)]
-		pub fn cause_error(origin: OriginFor<T>) -> DispatchResult {
-			let _who = ensure_signed(origin)?;
-
-			// Read a value from storage.
-			// match <Something<T>>::get() {
-			// 	// Return an error if the value has not been set.
-			// 	None => return Err(Error::<T>::NoneValue.into()),
-			// 	Some(old) => {
-			// 		// Increment the value read from storage; will error in the event of overflow.
-			// 		let new = old.checked_add(1).ok_or(Error::<T>::StorageOverflow)?;
-			// 		// Update the value in storage with the incremented result.
-			// 		// <Something<T>>::put(new);
-			// 		Ok(())
-			// 	},
-			// }
 			Ok(())
 		}
 	}

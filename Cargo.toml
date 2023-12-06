@@ -3,7 +3,7 @@ cargo-features = ["resolver"]
 [workspace]
 members = [
     "node",
-    "pallets/template",
+    "pallets/*",
     "modules/*",
     "primitives",
     "runtime",
